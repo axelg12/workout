@@ -1,6 +1,7 @@
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
+allowBuilds:
+  esbuild: false
+  sharp: false
+  unrs-resolver: false
 # Next 16.2.7 was published very recently, tripping pnpm's minimum-release-age
 # supply-chain policy. Relax it for this project and skip the pre-run deps check
 # (which otherwise re-triggers the policy and blocks `pnpm dev` / `pnpm seed`).
