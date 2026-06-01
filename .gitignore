@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# personal workout data — read locally by the seed; the data lives in Neon after import
+/example/*.xlsx
