@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, isNotNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lt } from "drizzle-orm";
 import { db } from "./db";
 import {
   planDays,
@@ -21,6 +21,35 @@ export type DayView = {
   exercises: ExerciseWithLog[];
   dayLog: DayLog | null;
 } | null;
+
+export type UpcomingDay = {
+  date: string;
+  dayOfWeek: string | null;
+  workoutType: string | null;
+  focus: string | null;
+  weekLabel: string | null;
+  monthLabel: string | null;
+};
+
+/** The next `limit` planned days from `fromDate` (inclusive), ascending. For the home view. */
+export async function getUpcoming(
+  fromDate: string,
+  limit: number,
+): Promise<UpcomingDay[]> {
+  return db
+    .select({
+      date: planDays.date,
+      dayOfWeek: planDays.dayOfWeek,
+      workoutType: planDays.workoutType,
+      focus: planDays.focus,
+      weekLabel: planDays.weekLabel,
+      monthLabel: planDays.monthLabel,
+    })
+    .from(planDays)
+    .where(gte(planDays.date, fromDate))
+    .orderBy(asc(planDays.date))
+    .limit(limit);
+}
 
 /** All planned dates, ascending. Used for navigation and the "nearest day" fallback. */
 export async function getPlanDates(): Promise<string[]> {
