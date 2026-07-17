@@ -8,6 +8,13 @@
       "when": 1780350107112,
       "tag": "0000_friendly_boom_boom",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784292884515,
+      "tag": "0001_simple_blue_marvel",
+      "breakpoints": true
     }
   ]
 }

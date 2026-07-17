@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { exerciseLogs, dayLogs } from "@/lib/schema";
+import { exerciseLogs, dayLogs, bodyWeights } from "@/lib/schema";
 
 /** Upsert the per-exercise log (keyed by plan_exercise_id). */
 export async function logExercise(formData: FormData) {
@@ -45,6 +45,25 @@ export async function logDay(formData: FormData) {
     });
 
   revalidatePath(`/day/${date}`);
+}
+
+/** Upsert the body-weight entry (keyed by date). Accepts "82,5" and "82.5". */
+export async function logBodyWeight(formData: FormData) {
+  const date = String(formData.get("date") ?? "");
+  const raw = String(formData.get("weightKg") ?? "").trim().replace(",", ".");
+  const weightKg = Number(raw);
+
+  if (!date || !Number.isFinite(weightKg) || weightKg <= 0) return;
+
+  await db
+    .insert(bodyWeights)
+    .values({ date, weightKg })
+    .onConflictDoUpdate({
+      target: bodyWeights.date,
+      set: { weightKg, updatedAt: new Date() },
+    });
+
+  revalidatePath("/");
 }
 
 /** Clear a logged exercise. */

@@ -1,19 +1,28 @@
 import "server-only";
-import { and, asc, desc, eq, gte, isNotNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { db } from "./db";
 import {
   planDays,
   planExercises,
   exerciseLogs,
   dayLogs,
+  bodyWeights,
   type PlanExercise,
   type ExerciseLog,
   type DayLog,
+  type BodyWeight,
 } from "./schema";
+import {
+  analyzeHistory,
+  canonicalName,
+  insightFor,
+  type ExerciseInsight,
+} from "./analysis";
 
 export type ExerciseWithLog = PlanExercise & {
   log: ExerciseLog | null;
   lastTime: { date: string; actual: string | null } | null;
+  insight: ExerciseInsight | null;
 };
 
 export type DayView = {
@@ -60,27 +69,37 @@ export async function getPlanDates(): Promise<string[]> {
   return rows.map((r) => r.date);
 }
 
-/** Most recent prior logged actual for an exercise, before `beforeDate`. */
-async function getLastTime(
-  exerciseName: string,
-  beforeDate: string,
-): Promise<{ date: string; actual: string | null } | null> {
-  const rows = await db
-    .select({ date: exerciseLogs.date, actual: exerciseLogs.actual })
+/** All logged actuals, ascending by date. One cheap query; grouped by canonical name in JS. */
+export type StrengthLogRow = {
+  date: string;
+  exerciseName: string;
+  actual: string | null;
+};
+
+export async function getAllStrengthLogs(): Promise<StrengthLogRow[]> {
+  return db
+    .select({
+      date: exerciseLogs.date,
+      exerciseName: exerciseLogs.exerciseName,
+      actual: exerciseLogs.actual,
+    })
     .from(exerciseLogs)
-    .where(
-      and(
-        eq(exerciseLogs.exerciseName, exerciseName),
-        lt(exerciseLogs.date, beforeDate),
-        isNotNull(exerciseLogs.actual),
-      ),
-    )
-    .orderBy(desc(exerciseLogs.date))
-    .limit(1);
-  return rows[0] ?? null;
+    .where(isNotNull(exerciseLogs.actual))
+    .orderBy(asc(exerciseLogs.date));
 }
 
-/** Load a single day: plan + parsed exercises (each with its log + last-time) + day log. */
+function groupByCanonical(rows: StrengthLogRow[]): Map<string, StrengthLogRow[]> {
+  const groups = new Map<string, StrengthLogRow[]>();
+  for (const r of rows) {
+    const key = canonicalName(r.exerciseName);
+    const list = groups.get(key);
+    if (list) list.push(r);
+    else groups.set(key, [r]);
+  }
+  return groups;
+}
+
+/** Load a single day: plan + parsed exercises (each with its log + last-time + insight) + day log. */
 export async function getDay(date: string): Promise<DayView> {
   const dayRows = await db
     .select()
@@ -105,13 +124,21 @@ export async function getDay(date: string): Promise<DayView> {
     if (log.planExerciseId != null) logByExerciseId.set(log.planExerciseId, log);
   }
 
+  // One query for all logged history (~dozens of rows), alias-aware so
+  // "Squats" and "Squats (Heels slightly elevated)" share one lineage.
+  const historyByName = groupByCanonical(await getAllStrengthLogs());
+
   const exercises: ExerciseWithLog[] = [];
   for (const ex of exerciseRows) {
-    const lastTime = await getLastTime(ex.name, date);
+    const history = historyByName.get(canonicalName(ex.name)) ?? [];
+    const prior = history.filter((h) => h.date < date);
+    const last = prior[prior.length - 1];
+    const sessions = analyzeHistory(history.filter((h) => h.date <= date));
     exercises.push({
       ...ex,
       log: logByExerciseId.get(ex.id) ?? null,
-      lastTime,
+      lastTime: last ? { date: last.date, actual: last.actual } : null,
+      insight: insightFor(sessions, date),
     });
   }
 
@@ -122,6 +149,22 @@ export async function getDay(date: string): Promise<DayView> {
     .limit(1);
 
   return { day, exercises, dayLog: dayLogRows[0] ?? null };
+}
+
+/** All body-weight entries, ascending by date. */
+export async function getBodyWeights(): Promise<BodyWeight[]> {
+  return db.select().from(bodyWeights).orderBy(asc(bodyWeights.date));
+}
+
+/** Per-canonical-exercise session stats for the progress page, most-logged first. */
+export async function getProgressByExercise(): Promise<
+  { name: string; sessions: ReturnType<typeof analyzeHistory> }[]
+> {
+  const groups = groupByCanonical(await getAllStrengthLogs());
+  return [...groups.entries()]
+    .map(([name, rows]) => ({ name, sessions: analyzeHistory(rows) }))
+    .filter(({ sessions }) => sessions.filter((s) => s.topWeightKg !== null).length >= 2)
+    .sort((a, b) => b.sessions.length - a.sessions.length);
 }
 
 /** Full history for an exercise (most recent first). */

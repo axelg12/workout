@@ -44,6 +44,28 @@ export function ExerciseRow({
             </span>
           )}
 
+          {exercise.insight?.trend && (
+            <span className="mt-1.5 flex items-center gap-1.5 text-xs">
+              <span
+                className={
+                  exercise.insight.trend === "up"
+                    ? "font-semibold text-emerald-600 dark:text-emerald-400"
+                    : "text-zinc-400"
+                }
+              >
+                {exercise.insight.trend === "up" && "↑"}
+                {exercise.insight.trend === "down" && "↓"}
+                {exercise.insight.trend === "same" && "→"}{" "}
+                vs last time ({exercise.insight.prevTopWeightKg}kg)
+              </span>
+              {exercise.insight.isPr && (
+                <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                  PR
+                </span>
+              )}
+            </span>
+          )}
+
           {exercise.lastTime?.actual && (
             <span className="mt-1.5 block truncate text-xs text-zinc-400">
               Last ({formatShort(exercise.lastTime.date)}): {exercise.lastTime.actual}

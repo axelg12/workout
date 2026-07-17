@@ -1,6 +1,9 @@
 import Link from "next/link";
-import { getUpcoming, getPlanDates } from "@/lib/queries";
+import { getUpcoming, getPlanDates, getBodyWeights } from "@/lib/queries";
 import { todayISO, formatLong, formatShort, nearestDate } from "@/lib/dates";
+import { rollingAverage } from "@/lib/analysis";
+import { BodyWeightCard } from "./components/BodyWeightCard";
+import { LineChart } from "./components/LineChart";
 
 // "Today" must be computed per request, never baked at build time.
 export const dynamic = "force-dynamic";
@@ -18,7 +21,42 @@ function typeStyle(t: string | null) {
 
 export default async function Home() {
   const today = todayISO();
-  const upcoming = await getUpcoming(today, 8);
+  const [upcoming, weights] = await Promise.all([
+    getUpcoming(today, 8),
+    getBodyWeights(),
+  ]);
+
+  const latestWeight = weights[weights.length - 1] ?? null;
+  const todayWeight = weights.find((w) => w.date === today) ?? null;
+  const weightAvgSeries = rollingAverage(
+    weights.map((w) => ({ date: w.date, value: w.weightKg })),
+  );
+  const weekAvgKg =
+    weightAvgSeries.length > 0
+      ? Math.round(weightAvgSeries[weightAvgSeries.length - 1].value * 10) / 10
+      : null;
+  // Small trend: the last ~30 entries, smoothed line + daily dots.
+  const recentWeights = weights.slice(-30);
+  const weightChart = (
+    <>
+      {recentWeights.length >= 2 && (
+        <div className="mt-2">
+          <LineChart
+            points={recentWeights.map((w) => ({ x: w.date, y: w.weightKg }))}
+            avgPoints={
+              recentWeights.length >= 3
+                ? rollingAverage(
+                    recentWeights.map((w) => ({ date: w.date, value: w.weightKg })),
+                  ).map((p) => ({ x: p.date, y: Math.round(p.value * 10) / 10 }))
+                : undefined
+            }
+            unit="kg"
+            height={110}
+          />
+        </div>
+      )}
+    </>
+  );
 
   // Plan finished (no days today or later): point at the most recent day.
   if (upcoming.length === 0) {
@@ -46,9 +84,17 @@ export default async function Home() {
 
   return (
     <main className="mx-auto w-full max-w-md flex-1 px-4 py-6">
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold">Workout</h1>
-        <p className="text-sm text-zinc-500">{formatLong(today)}</p>
+      <header className="mb-5 flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Workout</h1>
+          <p className="text-sm text-zinc-500">{formatLong(today)}</p>
+        </div>
+        <Link
+          href="/progress"
+          className="rounded-full border border-zinc-300 px-3.5 py-1.5 text-sm font-medium text-emerald-600 dark:border-zinc-700 dark:text-emerald-400"
+        >
+          Progress →
+        </Link>
       </header>
 
       {/* Today's (or next) workout — the primary action */}
@@ -111,6 +157,22 @@ export default async function Home() {
           </ul>
         </section>
       )}
+
+      {/* Body weight quick entry + trend */}
+      <div className="mt-6">
+        <BodyWeightCard
+          date={today}
+          todayWeightKg={todayWeight?.weightKg ?? null}
+          latest={
+            latestWeight
+              ? { date: latestWeight.date, weightKg: latestWeight.weightKg }
+              : null
+          }
+          weekAvgKg={weekAvgKg}
+        >
+          {weightChart}
+        </BodyWeightCard>
+      </div>
     </main>
   );
 }

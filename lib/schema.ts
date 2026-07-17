@@ -5,6 +5,7 @@ import {
   text,
   boolean,
   date,
+  doublePrecision,
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
@@ -63,7 +64,16 @@ export const dayLogs = pgTable("day_logs", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const bodyWeights = pgTable("body_weights", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull().unique(),
+  // doublePrecision so Drizzle returns number (numeric would come back as string).
+  weightKg: doublePrecision("weight_kg").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type PlanDay = typeof planDays.$inferSelect;
 export type PlanExercise = typeof planExercises.$inferSelect;
 export type ExerciseLog = typeof exerciseLogs.$inferSelect;
 export type DayLog = typeof dayLogs.$inferSelect;
+export type BodyWeight = typeof bodyWeights.$inferSelect;

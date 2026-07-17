@@ -28,6 +28,12 @@ export function formatShort(iso: string): string {
   return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
+/** "28 May" — compact, for chart axes and labels. */
+export function formatDay(iso: string): string {
+  const d = parseISO(iso);
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
 /** "Wednesday, 28 May 2026" */
 export function formatLong(iso: string): string {
   const d = parseISO(iso);
